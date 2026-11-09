@@ -1,0 +1,55 @@
+name: Render clips
+
+# Run it by hand: GitHub -> Actions tab -> "Render clips" -> Run workflow.
+# Each chapter renders as its own parallel job and is saved as a downloadable zip (artifact).
+on:
+  workflow_dispatch:
+    inputs:
+      chapters:
+        description: 'Chapters to render, comma separated (1 to 8)'
+        default: '1,2,3,4,5,6,7,8'
+      labels:
+        description: 'Add the optional paper labels?'
+        type: boolean
+        default: false
+      hide_slot_text:
+        description: 'Hide the "ADD IMAGE" text on placeholder shots?'
+        type: boolean
+        default: true
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        chapter: ${{ fromJSON(format('[{0}]', inputs.chapters)) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: System libraries for headless Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libdbus-1-3 libatk1.0-0 libasound2t64 libxrandr2 libxkbcommon-dev libxfixes3 libxcomposite1 libxdamage1 libgbm-dev libatk-bridge2.0-0 libcups2
+
+      - run: npm ci
+
+      - name: Render chapter ${{ matrix.chapter }}
+        run: >
+          npm run render:clips --
+          --prefix C${{ matrix.chapter }}-
+          ${{ inputs.labels && '--labels' || '' }}
+          ${{ inputs.hide_slot_text && '--no-slot-text' || '' }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clips-chapter-${{ matrix.chapter }}
+          path: out/clips/*.mp4
+          retention-days: 7
+          compression-level: 0
